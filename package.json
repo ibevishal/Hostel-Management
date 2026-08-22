@@ -1,0 +1,13 @@
+{
+  "name": "hostel-management",
+  "private": true,
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "echo 'Run npm run dev -w server and npm run dev -w client in separate terminals.'",
+    "build": "npm run build -w client && npm run build -w server",
+    "db:generate": "npm run db:generate -w server",
+    "db:migrate": "npm run db:migrate -w server",
+    "db:seed": "npm run db:seed -w server"
+  },
+  "devDependencies": {}
+}

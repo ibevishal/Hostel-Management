@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  WARDEN
+  CARETAKER
+  STUDENT
+}
+
+enum UserState {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+  GRADUATED
+  REMOVED
+}
+
+enum HostelType {
+  BOYS
+  GIRLS
+}
+
+enum EquipmentStatus {
+  WORKING
+  NOT_WORKING
+  DAMAGED
+  MISSING
+  NOT_AVAILABLE
+  NEEDS_MAINTENANCE
+}
+
+enum IssueStatus {
+  SUBMITTED
+  RECEIVED
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_FOR_REPAIR
+  RESOLVED
+  REJECTED
+  REOPENED
+  ESCALATED
+}
+
+enum IssueCategory {
+  EQUIPMENT
+  CLEANING
+  WIFI
+  ELECTRICAL
+  WASHROOM
+  CORRIDOR
+  OTHER
+}
+
+model User {
+  id            String           @id @default(cuid())
+  email         String?          @unique
+  passwordHash  String
+  role          Role
+  state         UserState        @default(ACTIVE)
+  name          String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  student       Student?
+  assignments   AreaAssignment[]
+  notifications Notification[]
+  issueEvents   IssueEvent[]
+  auditLogs     AuditLog[]
+}
+
+model Student {
+  id               String             @id @default(cuid())
+  userId           String             @unique
+  registrationNo   String             @unique
+  dateOfBirth      DateTime
+  profileComplete  Boolean            @default(false)
+  phone            String?
+  guardianName     String?
+  guardianPhone    String?
+  address          String?
+  course           String?
+  branch           String?
+  year             Int?
+  semester         Int?
+  emergencyContact String?
+  user             User               @relation(fields: [userId], references: [id])
+  allocations      RoomAllocation[]
+  issues           Issue[]
+}
+
+model Hostel {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  type      HostelType
+  active    Boolean  @default(true)
+  floors    Floor[]
+  createdAt DateTime @default(now())
+}
+
+model Floor {
+  id        String     @id @default(cuid())
+  hostelId  String
+  name      String
+  sortOrder Int
+  hostel    Hostel     @relation(fields: [hostelId], references: [id], onDelete: Restrict)
+  corridors Corridor[]
+
+  @@unique([hostelId, name])
+}
+
+model Corridor {
+  id      String @id @default(cuid())
+  floorId String
+  name    String
+  mapZone String?
+  floor   Floor  @relation(fields: [floorId], references: [id], onDelete: Restrict)
+  rooms   Room[]
+
+  @@unique([floorId, name])
+}
+
+model RoomType {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  capacity Int
+  active   Boolean @default(true)
+  rooms    Room[]
+}
+
+model Room {
+  id          String           @id @default(cuid())
+  corridorId  String
+  roomTypeId  String
+  number      String
+  position    Int?
+  active      Boolean          @default(true)
+  corridor    Corridor         @relation(fields: [corridorId], references: [id], onDelete: Restrict)
+  roomType    RoomType         @relation(fields: [roomTypeId], references: [id])
+  equipment   RoomEquipment[]
+  allocations RoomAllocation[]
+  issues      Issue[]
+
+  @@unique([corridorId, number])
+}
+
+model EquipmentType {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  active        Boolean         @default(true)
+  roomEquipment RoomEquipment[]
+}
+
+model RoomEquipment {
+  id              String          @id @default(cuid())
+  roomId          String
+  equipmentTypeId String
+  quantity        Int             @default(1)
+  status          EquipmentStatus @default(WORKING)
+  remarks         String?
+  updatedAt       DateTime        @updatedAt
+  room            Room            @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  equipmentType   EquipmentType   @relation(fields: [equipmentTypeId], references: [id])
+  history         EquipmentHistory[]
+
+  @@unique([roomId, equipmentTypeId])
+}
+
+model EquipmentHistory {
+  id               String          @id @default(cuid())
+  roomEquipmentId  String
+  previousStatus   EquipmentStatus?
+  status           EquipmentStatus
+  remarks          String?
+  evidencePath     String?
+  updatedAt        DateTime        @default(now())
+  roomEquipment    RoomEquipment   @relation(fields: [roomEquipmentId], references: [id], onDelete: Restrict)
+}
+
+model AreaAssignment {
+  id         String  @id @default(cuid())
+  userId     String
+  hostelId   String?
+  floorId    String?
+  corridorId String?
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RoomAllocation {
+  id          String   @id @default(cuid())
+  studentId   String
+  roomId      String
+  startsAt    DateTime @default(now())
+  endsAt      DateTime?
+  reason      String?
+  createdById String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, endsAt])
+}
+
+model Issue {
+  id              String        @id @default(cuid())
+  studentId       String
+  roomId          String
+  roomEquipmentId String?
+  category        IssueCategory
+  title           String
+  description     String?
+  status          IssueStatus   @default(SUBMITTED)
+  assignedToId    String?
+  escalationLevel Int           @default(0)
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  room            Room          @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  events          IssueEvent[]
+
+  @@index([roomId, status])
+}
+
+model IssueEvent {
+  id        String   @id @default(cuid())
+  issueId   String
+  actorId   String?
+  action    String
+  message   String?
+  createdAt DateTime @default(now())
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}

@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import { PrismaClient, Role } from '@prisma/client';
+const prisma = new PrismaClient();
+const email = process.env.SUPER_ADMIN_EMAIL ?? 'admin@hostel.local';
+const password = process.env.SUPER_ADMIN_PASSWORD ?? 'ChangeMe123!';
+await prisma.user.upsert({ where: { email }, update: {}, create: { email, passwordHash: await bcrypt.hash(password, 12), role: Role.SUPER_ADMIN, name: 'Super Admin' } });
+await prisma.setting.upsert({ where:{key:'escalation'}, update:{}, create:{key:'escalation',value:JSON.stringify({caretakerHours:48,wardenHours:72,superAdminHours:48,appealDays:5})} });
+console.log(`Super Admin ready: ${email}`);
+await prisma.$disconnect();
